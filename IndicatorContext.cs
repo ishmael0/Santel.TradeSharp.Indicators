@@ -4,6 +4,8 @@ public sealed class IndicatorContext
 {
     private readonly IReadOnlyList<Candle> _candles;
     private readonly List<EmaIndicator> _emas = new();
+    private readonly List<SmaIndicator> _smas = new();
+    private readonly List<RsiIndicator> _rsis = new();
     private readonly List<MacdIndicator> _macds = new();
 
     public IndicatorContext(IReadOnlyList<Candle> candles)
@@ -13,6 +15,8 @@ public sealed class IndicatorContext
 
     public IReadOnlyList<Candle> Candles => _candles;
     public IReadOnlyList<EmaIndicator> Emas => _emas;
+    public IReadOnlyList<SmaIndicator> Smas => _smas;
+    public IReadOnlyList<RsiIndicator> Rsis => _rsis;
     public IReadOnlyList<MacdIndicator> Macds => _macds;
 
     public double[] GetEma(int period)
@@ -43,6 +47,89 @@ public sealed class IndicatorContext
         }
 
         _emas.Add(new EmaIndicator(period, values));
+        return values;
+    }
+
+    public double[] GetSma(int period)
+    {
+        if (period <= 0) throw new ArgumentOutOfRangeException(nameof(period));
+
+        for (var i = 0; i < _smas.Count; i++)
+        {
+            if (_smas[i].Period == period)
+            {
+                return _smas[i].Values;
+            }
+        }
+
+        var values = new double[_candles.Count];
+
+        for (var i = 0; i < _candles.Count; i++)
+        {
+            var start = Math.Max(0, i - period + 1);
+            var count = i - start + 1;
+            var sum = 0.0;
+
+            for (var j = start; j <= i; j++)
+            {
+                sum += _candles[j].Close;
+            }
+
+            values[i] = sum / count;
+        }
+
+        _smas.Add(new SmaIndicator(period, values));
+        return values;
+    }
+
+    public double[] GetRsi(int period)
+    {
+        if (period <= 0) throw new ArgumentOutOfRangeException(nameof(period));
+
+        for (var i = 0; i < _rsis.Count; i++)
+        {
+            if (_rsis[i].Period == period)
+            {
+                return _rsis[i].Values;
+            }
+        }
+
+        var values = new double[_candles.Count];
+
+        if (_candles.Count > 1)
+        {
+            var gains = new double[_candles.Count];
+            var losses = new double[_candles.Count];
+
+            for (var i = 1; i < _candles.Count; i++)
+            {
+                var change = _candles[i].Close - _candles[i - 1].Close;
+                gains[i] = change > 0 ? change : 0;
+                losses[i] = change < 0 ? -change : 0;
+            }
+
+            var avgGain = 0.0;
+            var avgLoss = 0.0;
+
+            for (var i = 1; i <= period && i < _candles.Count; i++)
+            {
+                avgGain += gains[i];
+                avgLoss += losses[i];
+            }
+            avgGain /= period;
+            avgLoss /= period;
+
+            values[period] = avgLoss == 0 ? 100 : 100 - (100 / (1 + avgGain / avgLoss));
+
+            for (var i = period + 1; i < _candles.Count; i++)
+            {
+                avgGain = (avgGain * (period - 1) + gains[i]) / period;
+                avgLoss = (avgLoss * (period - 1) + losses[i]) / period;
+                values[i] = avgLoss == 0 ? 100 : 100 - (100 / (1 + avgGain / avgLoss));
+            }
+        }
+
+        _rsis.Add(new RsiIndicator(period, values));
         return values;
     }
 
