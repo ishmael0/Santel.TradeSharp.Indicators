@@ -6,6 +6,7 @@ public sealed class IndicatorContext
     private readonly List<EmaIndicator> _emas = new();
     private readonly List<SmaIndicator> _smas = new();
     private readonly List<RsiIndicator> _rsis = new();
+    private readonly List<BollingerBandsIndicator> _bollingerBands = new();
     private readonly List<MacdIndicator> _macds = new();
 
     public IndicatorContext(IReadOnlyList<Candle> candles)
@@ -17,6 +18,7 @@ public sealed class IndicatorContext
     public IReadOnlyList<EmaIndicator> Emas => _emas;
     public IReadOnlyList<SmaIndicator> Smas => _smas;
     public IReadOnlyList<RsiIndicator> Rsis => _rsis;
+    public IReadOnlyList<BollingerBandsIndicator> BollingerBands => _bollingerBands;
     public IReadOnlyList<MacdIndicator> Macds => _macds;
 
     public double[] GetEma(int period)
@@ -131,6 +133,46 @@ public sealed class IndicatorContext
 
         _rsis.Add(new RsiIndicator(period, values));
         return values;
+    }
+
+    public BollingerBands GetBollingerBands(int period, double standardDeviation = 2.0)
+    {
+        if (period <= 0) throw new ArgumentOutOfRangeException(nameof(period));
+        if (standardDeviation <= 0) throw new ArgumentOutOfRangeException(nameof(standardDeviation));
+
+        for (var i = 0; i < _bollingerBands.Count; i++)
+        {
+            var existing = _bollingerBands[i];
+            if (existing.Period == period && existing.StandardDeviation == standardDeviation)
+            {
+                return existing.Bands;
+            }
+        }
+
+        var sma = GetSma(period);
+        var upper = new double[_candles.Count];
+        var lower = new double[_candles.Count];
+
+        for (var i = 0; i < _candles.Count; i++)
+        {
+            var start = Math.Max(0, i - period + 1);
+            var count = i - start + 1;
+            var sumSquares = 0.0;
+
+            for (var j = start; j <= i; j++)
+            {
+                var diff = _candles[j].Close - sma[i];
+                sumSquares += diff * diff;
+            }
+
+            var stdDev = Math.Sqrt(sumSquares / count);
+            upper[i] = sma[i] + (stdDev * standardDeviation);
+            lower[i] = sma[i] - (stdDev * standardDeviation);
+        }
+
+        var bands = new BollingerBands(upper, sma, lower);
+        _bollingerBands.Add(new BollingerBandsIndicator(period, standardDeviation, bands));
+        return bands;
     }
 
     public MacdSeries GetMacd(int fastPeriod, int slowPeriod, int signalPeriod)
