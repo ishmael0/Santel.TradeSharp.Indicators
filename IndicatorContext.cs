@@ -10,6 +10,7 @@ public sealed class IndicatorContext
     private readonly List<AdxIndicator> _adxs = new();
     private readonly List<CciIndicator> _ccis = new();
     private readonly List<WilliamsRIndicator> _williamsRs = new();
+    private readonly List<ObvIndicator> _obvs = new();
     private readonly List<BollingerBandsIndicator> _bollingerBands = new();
     private readonly List<StochasticIndicator> _stochastics = new();
     private readonly List<MacdIndicator> _macds = new();
@@ -27,6 +28,7 @@ public sealed class IndicatorContext
     public IReadOnlyList<AdxIndicator> Adxs => _adxs;
     public IReadOnlyList<CciIndicator> Ccis => _ccis;
     public IReadOnlyList<WilliamsRIndicator> WilliamsRs => _williamsRs;
+    public IReadOnlyList<ObvIndicator> Obvs => _obvs;
     public IReadOnlyList<BollingerBandsIndicator> BollingerBands => _bollingerBands;
     public IReadOnlyList<StochasticIndicator> Stochastics => _stochastics;
     public IReadOnlyList<MacdIndicator> Macds => _macds;
@@ -345,6 +347,40 @@ public sealed class IndicatorContext
         }
 
         _williamsRs.Add(new WilliamsRIndicator(period, values));
+        return values;
+    }
+
+    public double[] GetObv()
+    {
+        if (_obvs.Count > 0)
+        {
+            return _obvs[0].Values;
+        }
+
+        var values = new double[_candles.Count];
+
+        if (_candles.Count > 0)
+        {
+            values[0] = _candles[0].Volume;
+
+            for (var i = 1; i < _candles.Count; i++)
+            {
+                if (_candles[i].Close > _candles[i - 1].Close)
+                {
+                    values[i] = values[i - 1] + _candles[i].Volume;
+                }
+                else if (_candles[i].Close < _candles[i - 1].Close)
+                {
+                    values[i] = values[i - 1] - _candles[i].Volume;
+                }
+                else
+                {
+                    values[i] = values[i - 1];
+                }
+            }
+        }
+
+        _obvs.Add(new ObvIndicator(values));
         return values;
     }
 
