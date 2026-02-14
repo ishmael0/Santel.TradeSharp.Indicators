@@ -36,6 +36,9 @@ A high-performance .NET library for calculating technical analysis indicators on
 ## Installation
 
 ```bash
+# Install from NuGet
+dotnet add package Santel.TradeSharp.Indicators --version 1.0.1
+
 # Clone or download the repository
 git clone https://github.com/yourusername/Santel.TradeSharp.Indicators.git
 cd Santel.TradeSharp.Indicators
