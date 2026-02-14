@@ -340,7 +340,15 @@ foreach (var ema in context.Emas)
 
 ## License
 
-[Your License Here]
+This project is licensed under the MIT License - a permissive free software license.
+
+**You are free to:**
+- ✅ Use commercially
+- ✅ Modify
+- ✅ Distribute
+- ✅ Use privately
+
+This is a completely free and open-source package with no restrictions.
 
 ## Contributing
 
