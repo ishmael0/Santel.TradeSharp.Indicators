@@ -11,8 +11,10 @@ var candles = new List<Candle>
 
 var context = new IndicatorContext(candles);
 
-var ema12 = context.CalculateEma(12);
-var macd = context.CalculateMacd(12, 26, 9);
+var ema12 = context.GetEma(12);
+var macd = context.GetMacd(12, 26, 9);
 
-Console.WriteLine($"{ema12.Name}: {ema12.Values[^1]:F2}");
-Console.WriteLine($"{macd.Macd.Name}: {macd.Macd.Values[^1]:F2}");
+Console.WriteLine($"EMA(12): {ema12[^1]:F2}");
+Console.WriteLine($"MACD: {macd.Macd[^1]:F2}");
+Console.WriteLine($"Total EMAs calculated: {context.Emas.Count}");
+Console.WriteLine($"Total MACDs calculated: {context.Macds.Count}");

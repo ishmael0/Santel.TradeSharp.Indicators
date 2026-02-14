@@ -2,14 +2,14 @@ namespace Santel.TradeSharp.Indicators;
 
 public sealed class MacdSeries
 {
-    public MacdSeries(IndicatorSeries<double> macd, IndicatorSeries<double> signal, IndicatorSeries<double> histogram)
+    public MacdSeries(double[] macd, double[] signal, double[] histogram)
     {
         Macd = macd;
         Signal = signal;
         Histogram = histogram;
     }
 
-    public IndicatorSeries<double> Macd { get; }
-    public IndicatorSeries<double> Signal { get; }
-    public IndicatorSeries<double> Histogram { get; }
+    public double[] Macd { get; }
+    public double[] Signal { get; }
+    public double[] Histogram { get; }
 }

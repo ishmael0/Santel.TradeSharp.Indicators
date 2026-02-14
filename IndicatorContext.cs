@@ -15,7 +15,7 @@ public sealed class IndicatorContext
     public IReadOnlyList<EmaIndicator> Emas => _emas;
     public IReadOnlyList<MacdIndicator> Macds => _macds;
 
-    public IndicatorSeries<double> CalculateEma(int period)
+    public double[] GetEma(int period)
     {
         if (period <= 0) throw new ArgumentOutOfRangeException(nameof(period));
 
@@ -23,16 +23,30 @@ public sealed class IndicatorContext
         {
             if (_emas[i].Period == period)
             {
-                return _emas[i].Series;
+                return _emas[i].Values;
             }
         }
 
-        var series = IndicatorCalculators.CalculateEma(_candles, period);
-        _emas.Add(new EmaIndicator(period, series));
-        return series;
+        var values = new double[_candles.Count];
+
+        if (_candles.Count > 0)
+        {
+            var multiplier = 2.0 / (period + 1.0);
+            var ema = _candles[0].Close;
+            values[0] = ema;
+
+            for (var i = 1; i < _candles.Count; i++)
+            {
+                ema = ((_candles[i].Close - ema) * multiplier) + ema;
+                values[i] = ema;
+            }
+        }
+
+        _emas.Add(new EmaIndicator(period, values));
+        return values;
     }
 
-    public MacdSeries CalculateMacd(int fastPeriod, int slowPeriod, int signalPeriod)
+    public MacdSeries GetMacd(int fastPeriod, int slowPeriod, int signalPeriod)
     {
         if (fastPeriod <= 0) throw new ArgumentOutOfRangeException(nameof(fastPeriod));
         if (slowPeriod <= 0) throw new ArgumentOutOfRangeException(nameof(slowPeriod));
@@ -48,7 +62,36 @@ public sealed class IndicatorContext
             }
         }
 
-        var series = IndicatorCalculators.CalculateMacd(this, fastPeriod, slowPeriod, signalPeriod);
+        var fastEma = GetEma(fastPeriod);
+        var slowEma = GetEma(slowPeriod);
+
+        var macdValues = new double[_candles.Count];
+        for (var i = 0; i < macdValues.Length; i++)
+        {
+            macdValues[i] = fastEma[i] - slowEma[i];
+        }
+
+        var signalValues = new double[macdValues.Length];
+        if (macdValues.Length > 0)
+        {
+            var multiplier = 2.0 / (signalPeriod + 1.0);
+            var ema = macdValues[0];
+            signalValues[0] = ema;
+
+            for (var i = 1; i < macdValues.Length; i++)
+            {
+                ema = ((macdValues[i] - ema) * multiplier) + ema;
+                signalValues[i] = ema;
+            }
+        }
+
+        var histValues = new double[_candles.Count];
+        for (var i = 0; i < histValues.Length; i++)
+        {
+            histValues[i] = macdValues[i] - signalValues[i];
+        }
+
+        var series = new MacdSeries(macdValues, signalValues, histValues);
         _macds.Add(new MacdIndicator(fastPeriod, slowPeriod, signalPeriod, series));
         return series;
     }

@@ -2,12 +2,12 @@ namespace Santel.TradeSharp.Indicators;
 
 public sealed class EmaIndicator
 {
-    public EmaIndicator(int period, IndicatorSeries<double> series)
+    public EmaIndicator(int period, double[] values)
     {
         Period = period;
-        Series = series;
+        Values = values;
     }
 
     public int Period { get; }
-    public IndicatorSeries<double> Series { get; }
+    public double[] Values { get; }
 }
