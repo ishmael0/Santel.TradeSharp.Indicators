@@ -7,6 +7,7 @@ public sealed class IndicatorContext
     private readonly List<SmaIndicator> _smas = new();
     private readonly List<RsiIndicator> _rsis = new();
     private readonly List<AtrIndicator> _atrs = new();
+    private readonly List<AdxIndicator> _adxs = new();
     private readonly List<BollingerBandsIndicator> _bollingerBands = new();
     private readonly List<StochasticIndicator> _stochastics = new();
     private readonly List<MacdIndicator> _macds = new();
@@ -21,6 +22,7 @@ public sealed class IndicatorContext
     public IReadOnlyList<SmaIndicator> Smas => _smas;
     public IReadOnlyList<RsiIndicator> Rsis => _rsis;
     public IReadOnlyList<AtrIndicator> Atrs => _atrs;
+    public IReadOnlyList<AdxIndicator> Adxs => _adxs;
     public IReadOnlyList<BollingerBandsIndicator> BollingerBands => _bollingerBands;
     public IReadOnlyList<StochasticIndicator> Stochastics => _stochastics;
     public IReadOnlyList<MacdIndicator> Macds => _macds;
@@ -182,6 +184,83 @@ public sealed class IndicatorContext
 
         _atrs.Add(new AtrIndicator(period, values));
         return values;
+    }
+
+    public Adx GetAdx(int period)
+    {
+        if (period <= 0) throw new ArgumentOutOfRangeException(nameof(period));
+
+        for (var i = 0; i < _adxs.Count; i++)
+        {
+            if (_adxs[i].Period == period)
+            {
+                return _adxs[i].Adx;
+            }
+        }
+
+        var plusDm = new double[_candles.Count];
+        var minusDm = new double[_candles.Count];
+
+        for (var i = 1; i < _candles.Count; i++)
+        {
+            var highDiff = _candles[i].High - _candles[i - 1].High;
+            var lowDiff = _candles[i - 1].Low - _candles[i].Low;
+
+            plusDm[i] = (highDiff > lowDiff && highDiff > 0) ? highDiff : 0;
+            minusDm[i] = (lowDiff > highDiff && lowDiff > 0) ? lowDiff : 0;
+        }
+
+        var atr = GetAtr(period);
+        var plusDi = new double[_candles.Count];
+        var minusDi = new double[_candles.Count];
+
+        var smoothedPlusDm = 0.0;
+        var smoothedMinusDm = 0.0;
+
+        for (var i = 0; i < period && i < _candles.Count; i++)
+        {
+            smoothedPlusDm += plusDm[i];
+            smoothedMinusDm += minusDm[i];
+        }
+
+        for (var i = period - 1; i < _candles.Count; i++)
+        {
+            if (i > period - 1)
+            {
+                smoothedPlusDm = smoothedPlusDm - (smoothedPlusDm / period) + plusDm[i];
+                smoothedMinusDm = smoothedMinusDm - (smoothedMinusDm / period) + minusDm[i];
+            }
+
+            plusDi[i] = atr[i] > 0 ? (smoothedPlusDm / atr[i]) * 100 : 0;
+            minusDi[i] = atr[i] > 0 ? (smoothedMinusDm / atr[i]) * 100 : 0;
+        }
+
+        var dx = new double[_candles.Count];
+        for (var i = 0; i < _candles.Count; i++)
+        {
+            var diSum = plusDi[i] + minusDi[i];
+            dx[i] = diSum > 0 ? (Math.Abs(plusDi[i] - minusDi[i]) / diSum) * 100 : 0;
+        }
+
+        var adxValues = new double[_candles.Count];
+        var sum = 0.0;
+        for (var i = period - 1; i < period * 2 - 1 && i < _candles.Count; i++)
+        {
+            sum += dx[i];
+        }
+        if (_candles.Count > period * 2 - 2)
+        {
+            adxValues[period * 2 - 2] = sum / period;
+
+            for (var i = period * 2 - 1; i < _candles.Count; i++)
+            {
+                adxValues[i] = (adxValues[i - 1] * (period - 1) + dx[i]) / period;
+            }
+        }
+
+        var adx = new Adx(adxValues, plusDi, minusDi);
+        _adxs.Add(new AdxIndicator(period, adx));
+        return adx;
     }
 
     public BollingerBands GetBollingerBands(int period, double standardDeviation = 2.0)
