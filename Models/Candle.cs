@@ -1,4 +1,4 @@
-namespace Santel.TradeSharp.Indicators;
+namespace Santel.TradeSharp.Indicators.Models;
 
 public sealed class Candle
 {
