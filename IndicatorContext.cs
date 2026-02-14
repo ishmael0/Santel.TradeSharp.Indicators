@@ -8,6 +8,7 @@ public sealed class IndicatorContext
     private readonly List<RsiIndicator> _rsis = new();
     private readonly List<AtrIndicator> _atrs = new();
     private readonly List<AdxIndicator> _adxs = new();
+    private readonly List<CciIndicator> _ccis = new();
     private readonly List<BollingerBandsIndicator> _bollingerBands = new();
     private readonly List<StochasticIndicator> _stochastics = new();
     private readonly List<MacdIndicator> _macds = new();
@@ -23,6 +24,7 @@ public sealed class IndicatorContext
     public IReadOnlyList<RsiIndicator> Rsis => _rsis;
     public IReadOnlyList<AtrIndicator> Atrs => _atrs;
     public IReadOnlyList<AdxIndicator> Adxs => _adxs;
+    public IReadOnlyList<CciIndicator> Ccis => _ccis;
     public IReadOnlyList<BollingerBandsIndicator> BollingerBands => _bollingerBands;
     public IReadOnlyList<StochasticIndicator> Stochastics => _stochastics;
     public IReadOnlyList<MacdIndicator> Macds => _macds;
@@ -261,6 +263,53 @@ public sealed class IndicatorContext
         var adx = new Adx(adxValues, plusDi, minusDi);
         _adxs.Add(new AdxIndicator(period, adx));
         return adx;
+    }
+
+    public double[] GetCci(int period)
+    {
+        if (period <= 0) throw new ArgumentOutOfRangeException(nameof(period));
+
+        for (var i = 0; i < _ccis.Count; i++)
+        {
+            if (_ccis[i].Period == period)
+            {
+                return _ccis[i].Values;
+            }
+        }
+
+        var values = new double[_candles.Count];
+        var typicalPrices = new double[_candles.Count];
+
+        for (var i = 0; i < _candles.Count; i++)
+        {
+            typicalPrices[i] = (_candles[i].High + _candles[i].Low + _candles[i].Close) / 3.0;
+        }
+
+        for (var i = 0; i < _candles.Count; i++)
+        {
+            var start = Math.Max(0, i - period + 1);
+            var count = i - start + 1;
+            var sum = 0.0;
+
+            for (var j = start; j <= i; j++)
+            {
+                sum += typicalPrices[j];
+            }
+
+            var sma = sum / count;
+            var meanDeviation = 0.0;
+
+            for (var j = start; j <= i; j++)
+            {
+                meanDeviation += Math.Abs(typicalPrices[j] - sma);
+            }
+            meanDeviation /= count;
+
+            values[i] = meanDeviation > 0 ? (typicalPrices[i] - sma) / (0.015 * meanDeviation) : 0;
+        }
+
+        _ccis.Add(new CciIndicator(period, values));
+        return values;
     }
 
     public BollingerBands GetBollingerBands(int period, double standardDeviation = 2.0)
