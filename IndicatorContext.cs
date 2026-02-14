@@ -11,6 +11,7 @@ public sealed class IndicatorContext
     private readonly List<CciIndicator> _ccis = new();
     private readonly List<WilliamsRIndicator> _williamsRs = new();
     private readonly List<ObvIndicator> _obvs = new();
+    private readonly List<MfiIndicator> _mfis = new();
     private readonly List<BollingerBandsIndicator> _bollingerBands = new();
     private readonly List<StochasticIndicator> _stochastics = new();
     private readonly List<MacdIndicator> _macds = new();
@@ -29,6 +30,7 @@ public sealed class IndicatorContext
     public IReadOnlyList<CciIndicator> Ccis => _ccis;
     public IReadOnlyList<WilliamsRIndicator> WilliamsRs => _williamsRs;
     public IReadOnlyList<ObvIndicator> Obvs => _obvs;
+    public IReadOnlyList<MfiIndicator> Mfis => _mfis;
     public IReadOnlyList<BollingerBandsIndicator> BollingerBands => _bollingerBands;
     public IReadOnlyList<StochasticIndicator> Stochastics => _stochastics;
     public IReadOnlyList<MacdIndicator> Macds => _macds;
@@ -381,6 +383,67 @@ public sealed class IndicatorContext
         }
 
         _obvs.Add(new ObvIndicator(values));
+        return values;
+    }
+
+    public double[] GetMfi(int period)
+    {
+        if (period <= 0) throw new ArgumentOutOfRangeException(nameof(period));
+
+        for (var i = 0; i < _mfis.Count; i++)
+        {
+            if (_mfis[i].Period == period)
+            {
+                return _mfis[i].Values;
+            }
+        }
+
+        var values = new double[_candles.Count];
+
+        if (_candles.Count > 1)
+        {
+            var typicalPrices = new double[_candles.Count];
+            var moneyFlows = new double[_candles.Count];
+
+            for (var i = 0; i < _candles.Count; i++)
+            {
+                typicalPrices[i] = (_candles[i].High + _candles[i].Low + _candles[i].Close) / 3.0;
+                moneyFlows[i] = typicalPrices[i] * _candles[i].Volume;
+            }
+
+            for (var i = period; i < _candles.Count; i++)
+            {
+                var positiveFlow = 0.0;
+                var negativeFlow = 0.0;
+
+                for (var j = i - period + 1; j <= i; j++)
+                {
+                    if (j > 0)
+                    {
+                        if (typicalPrices[j] > typicalPrices[j - 1])
+                        {
+                            positiveFlow += moneyFlows[j];
+                        }
+                        else if (typicalPrices[j] < typicalPrices[j - 1])
+                        {
+                            negativeFlow += moneyFlows[j];
+                        }
+                    }
+                }
+
+                if (negativeFlow == 0)
+                {
+                    values[i] = 100;
+                }
+                else
+                {
+                    var moneyFlowRatio = positiveFlow / negativeFlow;
+                    values[i] = 100 - (100 / (1 + moneyFlowRatio));
+                }
+            }
+        }
+
+        _mfis.Add(new MfiIndicator(period, values));
         return values;
     }
 
