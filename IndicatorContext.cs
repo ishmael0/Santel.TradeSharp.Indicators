@@ -12,6 +12,7 @@ public sealed class IndicatorContext
     private readonly List<WilliamsRIndicator> _williamsRs = new();
     private readonly List<ObvIndicator> _obvs = new();
     private readonly List<MfiIndicator> _mfis = new();
+    private readonly List<ParabolicSarIndicator> _parabolicSars = new();
     private readonly List<BollingerBandsIndicator> _bollingerBands = new();
     private readonly List<StochasticIndicator> _stochastics = new();
     private readonly List<MacdIndicator> _macds = new();
@@ -31,6 +32,7 @@ public sealed class IndicatorContext
     public IReadOnlyList<WilliamsRIndicator> WilliamsRs => _williamsRs;
     public IReadOnlyList<ObvIndicator> Obvs => _obvs;
     public IReadOnlyList<MfiIndicator> Mfis => _mfis;
+    public IReadOnlyList<ParabolicSarIndicator> ParabolicSars => _parabolicSars;
     public IReadOnlyList<BollingerBandsIndicator> BollingerBands => _bollingerBands;
     public IReadOnlyList<StochasticIndicator> Stochastics => _stochastics;
     public IReadOnlyList<MacdIndicator> Macds => _macds;
@@ -444,6 +446,90 @@ public sealed class IndicatorContext
         }
 
         _mfis.Add(new MfiIndicator(period, values));
+        return values;
+    }
+
+    public double[] GetParabolicSar(double accelerationFactor = 0.02, double maxAcceleration = 0.2)
+    {
+        if (accelerationFactor <= 0) throw new ArgumentOutOfRangeException(nameof(accelerationFactor));
+        if (maxAcceleration <= 0) throw new ArgumentOutOfRangeException(nameof(maxAcceleration));
+
+        for (var i = 0; i < _parabolicSars.Count; i++)
+        {
+            var existing = _parabolicSars[i];
+            if (existing.AccelerationFactor == accelerationFactor && existing.MaxAcceleration == maxAcceleration)
+            {
+                return existing.Values;
+            }
+        }
+
+        var values = new double[_candles.Count];
+
+        if (_candles.Count > 1)
+        {
+            var isUptrend = _candles[1].Close > _candles[0].Close;
+            var sar = isUptrend ? _candles[0].Low : _candles[0].High;
+            var ep = isUptrend ? _candles[1].High : _candles[1].Low;
+            var af = accelerationFactor;
+
+            values[0] = sar;
+
+            for (var i = 1; i < _candles.Count; i++)
+            {
+                sar = sar + af * (ep - sar);
+
+                if (isUptrend)
+                {
+                    if (i > 1)
+                    {
+                        sar = Math.Min(sar, Math.Min(_candles[i - 1].Low, _candles[i - 2].Low));
+                    }
+
+                    if (_candles[i].Low < sar)
+                    {
+                        isUptrend = false;
+                        sar = ep;
+                        ep = _candles[i].Low;
+                        af = accelerationFactor;
+                    }
+                    else
+                    {
+                        if (_candles[i].High > ep)
+                        {
+                            ep = _candles[i].High;
+                            af = Math.Min(af + accelerationFactor, maxAcceleration);
+                        }
+                    }
+                }
+                else
+                {
+                    if (i > 1)
+                    {
+                        sar = Math.Max(sar, Math.Max(_candles[i - 1].High, _candles[i - 2].High));
+                    }
+
+                    if (_candles[i].High > sar)
+                    {
+                        isUptrend = true;
+                        sar = ep;
+                        ep = _candles[i].High;
+                        af = accelerationFactor;
+                    }
+                    else
+                    {
+                        if (_candles[i].Low < ep)
+                        {
+                            ep = _candles[i].Low;
+                            af = Math.Min(af + accelerationFactor, maxAcceleration);
+                        }
+                    }
+                }
+
+                values[i] = sar;
+            }
+        }
+
+        _parabolicSars.Add(new ParabolicSarIndicator(accelerationFactor, maxAcceleration, values));
         return values;
     }
 
