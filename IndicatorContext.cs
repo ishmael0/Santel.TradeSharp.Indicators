@@ -13,6 +13,7 @@ public sealed class IndicatorContext
     private readonly List<ObvIndicator> _obvs = new();
     private readonly List<MfiIndicator> _mfis = new();
     private readonly List<ParabolicSarIndicator> _parabolicSars = new();
+    private readonly List<IchimokuIndicator> _ichimokus = new();
     private readonly List<BollingerBandsIndicator> _bollingerBands = new();
     private readonly List<StochasticIndicator> _stochastics = new();
     private readonly List<MacdIndicator> _macds = new();
@@ -33,6 +34,7 @@ public sealed class IndicatorContext
     public IReadOnlyList<ObvIndicator> Obvs => _obvs;
     public IReadOnlyList<MfiIndicator> Mfis => _mfis;
     public IReadOnlyList<ParabolicSarIndicator> ParabolicSars => _parabolicSars;
+    public IReadOnlyList<IchimokuIndicator> Ichimokus => _ichimokus;
     public IReadOnlyList<BollingerBandsIndicator> BollingerBands => _bollingerBands;
     public IReadOnlyList<StochasticIndicator> Stochastics => _stochastics;
     public IReadOnlyList<MacdIndicator> Macds => _macds;
@@ -531,6 +533,85 @@ public sealed class IndicatorContext
 
         _parabolicSars.Add(new ParabolicSarIndicator(accelerationFactor, maxAcceleration, values));
         return values;
+    }
+
+    public Ichimoku GetIchimoku(int tenkanPeriod = 9, int kijunPeriod = 26, int senkouSpanBPeriod = 52)
+    {
+        if (tenkanPeriod <= 0) throw new ArgumentOutOfRangeException(nameof(tenkanPeriod));
+        if (kijunPeriod <= 0) throw new ArgumentOutOfRangeException(nameof(kijunPeriod));
+        if (senkouSpanBPeriod <= 0) throw new ArgumentOutOfRangeException(nameof(senkouSpanBPeriod));
+
+        for (var i = 0; i < _ichimokus.Count; i++)
+        {
+            var existing = _ichimokus[i];
+            if (existing.TenkanPeriod == tenkanPeriod && existing.KijunPeriod == kijunPeriod && existing.SenkouSpanBPeriod == senkouSpanBPeriod)
+            {
+                return existing.Ichimoku;
+            }
+        }
+
+        var tenkanSen = new double[_candles.Count];
+        var kijunSen = new double[_candles.Count];
+        var senkouSpanA = new double[_candles.Count];
+        var senkouSpanB = new double[_candles.Count];
+        var chikouSpan = new double[_candles.Count];
+
+        for (var i = 0; i < _candles.Count; i++)
+        {
+            var tenkanStart = Math.Max(0, i - tenkanPeriod + 1);
+            var tenkanHigh = double.MinValue;
+            var tenkanLow = double.MaxValue;
+            for (var j = tenkanStart; j <= i; j++)
+            {
+                if (_candles[j].High > tenkanHigh) tenkanHigh = _candles[j].High;
+                if (_candles[j].Low < tenkanLow) tenkanLow = _candles[j].Low;
+            }
+            tenkanSen[i] = (tenkanHigh + tenkanLow) / 2.0;
+
+            var kijunStart = Math.Max(0, i - kijunPeriod + 1);
+            var kijunHigh = double.MinValue;
+            var kijunLow = double.MaxValue;
+            for (var j = kijunStart; j <= i; j++)
+            {
+                if (_candles[j].High > kijunHigh) kijunHigh = _candles[j].High;
+                if (_candles[j].Low < kijunLow) kijunLow = _candles[j].Low;
+            }
+            kijunSen[i] = (kijunHigh + kijunLow) / 2.0;
+
+            var senkouBStart = Math.Max(0, i - senkouSpanBPeriod + 1);
+            var senkouBHigh = double.MinValue;
+            var senkouBLow = double.MaxValue;
+            for (var j = senkouBStart; j <= i; j++)
+            {
+                if (_candles[j].High > senkouBHigh) senkouBHigh = _candles[j].High;
+                if (_candles[j].Low < senkouBLow) senkouBLow = _candles[j].Low;
+            }
+            var senkouBValue = (senkouBHigh + senkouBLow) / 2.0;
+
+            var senkouAValue = (tenkanSen[i] + kijunSen[i]) / 2.0;
+
+            var senkouAIndex = i + kijunPeriod;
+            if (senkouAIndex < _candles.Count)
+            {
+                senkouSpanA[senkouAIndex] = senkouAValue;
+            }
+
+            var senkouBIndex = i + kijunPeriod;
+            if (senkouBIndex < _candles.Count)
+            {
+                senkouSpanB[senkouBIndex] = senkouBValue;
+            }
+
+            var chikouIndex = i - kijunPeriod;
+            if (chikouIndex >= 0)
+            {
+                chikouSpan[chikouIndex] = _candles[i].Close;
+            }
+        }
+
+        var ichimoku = new Ichimoku(tenkanSen, kijunSen, senkouSpanA, senkouSpanB, chikouSpan);
+        _ichimokus.Add(new IchimokuIndicator(tenkanPeriod, kijunPeriod, senkouSpanBPeriod, ichimoku));
+        return ichimoku;
     }
 
     public BollingerBands GetBollingerBands(int period, double standardDeviation = 2.0)
