@@ -22,7 +22,7 @@
     <PackageReleaseNotes>Initial release with 15 technical indicators and automatic caching.</PackageReleaseNotes>
     <Copyright>Copyright (c) 2026 Santel</Copyright>
     <PackageRequireLicenseAcceptance>false</PackageRequireLicenseAcceptance>
-    <GeneratePackageOnBuild>True</GeneratePackageOnBuild>
+    <GeneratePackageOnBuild>False</GeneratePackageOnBuild>
   </PropertyGroup>
 
   <ItemGroup>
