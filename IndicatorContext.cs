@@ -9,6 +9,7 @@ public sealed class IndicatorContext
     private readonly List<AtrIndicator> _atrs = new();
     private readonly List<AdxIndicator> _adxs = new();
     private readonly List<CciIndicator> _ccis = new();
+    private readonly List<WilliamsRIndicator> _williamsRs = new();
     private readonly List<BollingerBandsIndicator> _bollingerBands = new();
     private readonly List<StochasticIndicator> _stochastics = new();
     private readonly List<MacdIndicator> _macds = new();
@@ -25,6 +26,7 @@ public sealed class IndicatorContext
     public IReadOnlyList<AtrIndicator> Atrs => _atrs;
     public IReadOnlyList<AdxIndicator> Adxs => _adxs;
     public IReadOnlyList<CciIndicator> Ccis => _ccis;
+    public IReadOnlyList<WilliamsRIndicator> WilliamsRs => _williamsRs;
     public IReadOnlyList<BollingerBandsIndicator> BollingerBands => _bollingerBands;
     public IReadOnlyList<StochasticIndicator> Stochastics => _stochastics;
     public IReadOnlyList<MacdIndicator> Macds => _macds;
@@ -309,6 +311,40 @@ public sealed class IndicatorContext
         }
 
         _ccis.Add(new CciIndicator(period, values));
+        return values;
+    }
+
+    public double[] GetWilliamsR(int period)
+    {
+        if (period <= 0) throw new ArgumentOutOfRangeException(nameof(period));
+
+        for (var i = 0; i < _williamsRs.Count; i++)
+        {
+            if (_williamsRs[i].Period == period)
+            {
+                return _williamsRs[i].Values;
+            }
+        }
+
+        var values = new double[_candles.Count];
+
+        for (var i = 0; i < _candles.Count; i++)
+        {
+            var start = Math.Max(0, i - period + 1);
+            var high = double.MinValue;
+            var low = double.MaxValue;
+
+            for (var j = start; j <= i; j++)
+            {
+                if (_candles[j].High > high) high = _candles[j].High;
+                if (_candles[j].Low < low) low = _candles[j].Low;
+            }
+
+            var range = high - low;
+            values[i] = range > 0 ? ((high - _candles[i].Close) / range) * -100 : 0;
+        }
+
+        _williamsRs.Add(new WilliamsRIndicator(period, values));
         return values;
     }
 
