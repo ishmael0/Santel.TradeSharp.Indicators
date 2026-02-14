@@ -7,6 +7,7 @@ public sealed class IndicatorContext
     private readonly List<SmaIndicator> _smas = new();
     private readonly List<RsiIndicator> _rsis = new();
     private readonly List<BollingerBandsIndicator> _bollingerBands = new();
+    private readonly List<StochasticIndicator> _stochastics = new();
     private readonly List<MacdIndicator> _macds = new();
 
     public IndicatorContext(IReadOnlyList<Candle> candles)
@@ -19,6 +20,7 @@ public sealed class IndicatorContext
     public IReadOnlyList<SmaIndicator> Smas => _smas;
     public IReadOnlyList<RsiIndicator> Rsis => _rsis;
     public IReadOnlyList<BollingerBandsIndicator> BollingerBands => _bollingerBands;
+    public IReadOnlyList<StochasticIndicator> Stochastics => _stochastics;
     public IReadOnlyList<MacdIndicator> Macds => _macds;
 
     public double[] GetEma(int period)
@@ -173,6 +175,59 @@ public sealed class IndicatorContext
         var bands = new BollingerBands(upper, sma, lower);
         _bollingerBands.Add(new BollingerBandsIndicator(period, standardDeviation, bands));
         return bands;
+    }
+
+    public Stochastic GetStochastic(int kPeriod, int dPeriod)
+    {
+        if (kPeriod <= 0) throw new ArgumentOutOfRangeException(nameof(kPeriod));
+        if (dPeriod <= 0) throw new ArgumentOutOfRangeException(nameof(dPeriod));
+
+        for (var i = 0; i < _stochastics.Count; i++)
+        {
+            var existing = _stochastics[i];
+            if (existing.KPeriod == kPeriod && existing.DPeriod == dPeriod)
+            {
+                return existing.Stochastic;
+            }
+        }
+
+        var kValues = new double[_candles.Count];
+
+        for (var i = 0; i < _candles.Count; i++)
+        {
+            var start = Math.Max(0, i - kPeriod + 1);
+            var high = double.MinValue;
+            var low = double.MaxValue;
+
+            for (var j = start; j <= i; j++)
+            {
+                if (_candles[j].High > high) high = _candles[j].High;
+                if (_candles[j].Low < low) low = _candles[j].Low;
+            }
+
+            var range = high - low;
+            kValues[i] = range > 0 ? ((_candles[i].Close - low) / range) * 100 : 0;
+        }
+
+        var dValues = new double[_candles.Count];
+        for (var i = 0; i < _candles.Count; i++)
+        {
+            var start = Math.Max(0, i - dPeriod + 1);
+            var sum = 0.0;
+            var count = 0;
+
+            for (var j = start; j <= i; j++)
+            {
+                sum += kValues[j];
+                count++;
+            }
+
+            dValues[i] = count > 0 ? sum / count : 0;
+        }
+
+        var stochastic = new Stochastic(kValues, dValues);
+        _stochastics.Add(new StochasticIndicator(kPeriod, dPeriod, stochastic));
+        return stochastic;
     }
 
     public MacdSeries GetMacd(int fastPeriod, int slowPeriod, int signalPeriod)
