@@ -6,6 +6,7 @@ public sealed class IndicatorContext
     private readonly List<EmaIndicator> _emas = new();
     private readonly List<SmaIndicator> _smas = new();
     private readonly List<RsiIndicator> _rsis = new();
+    private readonly List<AtrIndicator> _atrs = new();
     private readonly List<BollingerBandsIndicator> _bollingerBands = new();
     private readonly List<StochasticIndicator> _stochastics = new();
     private readonly List<MacdIndicator> _macds = new();
@@ -19,6 +20,7 @@ public sealed class IndicatorContext
     public IReadOnlyList<EmaIndicator> Emas => _emas;
     public IReadOnlyList<SmaIndicator> Smas => _smas;
     public IReadOnlyList<RsiIndicator> Rsis => _rsis;
+    public IReadOnlyList<AtrIndicator> Atrs => _atrs;
     public IReadOnlyList<BollingerBandsIndicator> BollingerBands => _bollingerBands;
     public IReadOnlyList<StochasticIndicator> Stochastics => _stochastics;
     public IReadOnlyList<MacdIndicator> Macds => _macds;
@@ -134,6 +136,51 @@ public sealed class IndicatorContext
         }
 
         _rsis.Add(new RsiIndicator(period, values));
+        return values;
+    }
+
+    public double[] GetAtr(int period)
+    {
+        if (period <= 0) throw new ArgumentOutOfRangeException(nameof(period));
+
+        for (var i = 0; i < _atrs.Count; i++)
+        {
+            if (_atrs[i].Period == period)
+            {
+                return _atrs[i].Values;
+            }
+        }
+
+        var values = new double[_candles.Count];
+
+        if (_candles.Count > 0)
+        {
+            var trueRanges = new double[_candles.Count];
+
+            trueRanges[0] = _candles[0].High - _candles[0].Low;
+
+            for (var i = 1; i < _candles.Count; i++)
+            {
+                var highLow = _candles[i].High - _candles[i].Low;
+                var highClose = Math.Abs(_candles[i].High - _candles[i - 1].Close);
+                var lowClose = Math.Abs(_candles[i].Low - _candles[i - 1].Close);
+                trueRanges[i] = Math.Max(highLow, Math.Max(highClose, lowClose));
+            }
+
+            var sum = 0.0;
+            for (var i = 0; i < period && i < _candles.Count; i++)
+            {
+                sum += trueRanges[i];
+            }
+            values[period - 1] = sum / period;
+
+            for (var i = period; i < _candles.Count; i++)
+            {
+                values[i] = (values[i - 1] * (period - 1) + trueRanges[i]) / period;
+            }
+        }
+
+        _atrs.Add(new AtrIndicator(period, values));
         return values;
     }
 
