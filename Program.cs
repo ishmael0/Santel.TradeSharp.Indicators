@@ -1,4 +1,5 @@
 ﻿using Santel.TradeSharp.Indicators;
+using Santel.TradeSharp.Indicators.Models;
 
 var candles = new List<Candle>
 {

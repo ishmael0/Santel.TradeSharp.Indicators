@@ -1,3 +1,6 @@
+using Santel.TradeSharp.Indicators.Indicators;
+using Santel.TradeSharp.Indicators.Models;
+
 namespace Santel.TradeSharp.Indicators;
 
 public sealed class IndicatorContext
