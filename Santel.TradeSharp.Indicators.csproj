@@ -1,10 +1,31 @@
 ﻿<Project Sdk="Microsoft.NET.Sdk">
 
   <PropertyGroup>
-    <OutputType>Exe</OutputType>
-    <TargetFramework>net10.0</TargetFramework>
+    <TargetFramework>net8.0</TargetFramework>
     <ImplicitUsings>enable</ImplicitUsings>
     <Nullable>enable</Nullable>
+    <GenerateDocumentationFile>true</GenerateDocumentationFile>
+    
+    <!-- NuGet Package Properties -->
+    <PackageId>Santel.TradeSharp.Indicators</PackageId>
+    <Version>1.0.0</Version>
+    <Authors>Santel</Authors>
+    <Company>Santel</Company>
+    <Product>TradeSharp Indicators</Product>
+    <Description>A high-performance .NET library for calculating technical analysis indicators on financial candle data. Supports 15+ indicators including EMA, SMA, RSI, MACD, Bollinger Bands, Stochastic, ADX, ATR, CCI, Williams %R, OBV, MFI, Parabolic SAR, and Ichimoku Cloud with automatic caching and memory optimization.</Description>
+    <PackageTags>trading;indicators;technical-analysis;finance;stocks;crypto;forex;ema;sma;rsi;macd;bollinger-bands;stochastic;adx;atr;ichimoku</PackageTags>
+    <PackageProjectUrl>https://github.com/yourusername/Santel.TradeSharp.Indicators</PackageProjectUrl>
+    <RepositoryUrl>https://github.com/yourusername/Santel.TradeSharp.Indicators</RepositoryUrl>
+    <RepositoryType>git</RepositoryType>
+    <PackageLicenseExpression>MIT</PackageLicenseExpression>
+    <PackageReadmeFile>README.md</PackageReadmeFile>
+    <PackageReleaseNotes>Initial release with 15 technical indicators and automatic caching.</PackageReleaseNotes>
+    <Copyright>Copyright (c) 2026 Santel</Copyright>
+    <PackageRequireLicenseAcceptance>false</PackageRequireLicenseAcceptance>
   </PropertyGroup>
+
+  <ItemGroup>
+    <None Include="README.md" Pack="true" PackagePath="\" />
+  </ItemGroup>
 
 </Project>
