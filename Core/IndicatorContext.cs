@@ -1,11 +1,41 @@
 using Santel.TradeSharp.Indicators.Indicators;
-using Santel.TradeSharp.Indicators.Models;
 
 namespace Santel.TradeSharp.Indicators;
 
-public sealed class IndicatorContext
+public sealed class Candle
 {
-    private readonly IReadOnlyList<Candle> _candles;
+    public Candle(DateTime time, double open, double high, double low, double close, double volume = 0)
+    {
+        Time = time;
+        Open = open;
+        High = high;
+        Low = low;
+        Close = close;
+        Volume = volume;
+    }
+
+    public DateTime Time { get; }
+    public double Open { get; }
+    public double High { get; }
+    public double Low { get; }
+    public double Close { get; }
+    public double Volume { get; }
+}
+public class IndicatorContext : IndicatorContext<Candle>
+{
+    public IndicatorContext(IReadOnlyList<Candle> data) : base(data, c => c.Time, c => c.Open, c => c.High, c => c.Low, c => c.Close, c => c.Volume)
+    {
+    }
+}
+public  class IndicatorContext<T>
+{
+    private readonly Func<T, DateTime> _time;
+    private readonly Func<T, double> _open;
+    private readonly Func<T, double> _high;
+    private readonly Func<T, double> _low;
+    private readonly Func<T, double> _close;
+    private readonly Func<T, double> _volume;
+    private readonly IReadOnlyList<T> _data;
     private readonly List<EmaIndicator> _emas = new();
     private readonly List<SmaIndicator> _smas = new();
     private readonly List<RsiIndicator> _rsis = new();
@@ -20,13 +50,35 @@ public sealed class IndicatorContext
     private readonly List<BollingerBandsIndicator> _bollingerBands = new();
     private readonly List<StochasticIndicator> _stochastics = new();
     private readonly List<MacdIndicator> _macds = new();
-
-    public IndicatorContext(IReadOnlyList<Candle> candles)
+    public IndicatorContext(
+     IReadOnlyList<T> data,
+     Func<T, DateTime> time,
+     Func<T, double> open,
+     Func<T, double> high,
+     Func<T, double> low,
+     Func<T, double> close,
+     Func<T, double>? volume)
     {
-        _candles = candles;
+        _data = data;
+        _time = time;
+        _open = open;
+        _high = high;
+        _low = low;
+        _close = close;
+        _volume = volume ?? (_ => 0);
     }
+    public DateTime Time(int i) => _time(_data[i]);
+    public double Open(int i) => _open(_data[i]);
+    public double High(int i) => _high(_data[i]);
+    public double Low(int i) => _low(_data[i]);
+    public double Close(int i) => _close(_data[i]);
+    public double Volume(int i) => _volume(_data[i]);
+    //public IndicatorContext(IReadOnlyList<Candle> candles)
+    //{
+    //    _data = candles;
+    //}
 
-    public IReadOnlyList<Candle> Candles => _candles;
+    //public IReadOnlyList<Candle> Candles => _data;
     public IReadOnlyList<EmaIndicator> Emas => _emas;
     public IReadOnlyList<SmaIndicator> Smas => _smas;
     public IReadOnlyList<RsiIndicator> Rsis => _rsis;
@@ -54,17 +106,17 @@ public sealed class IndicatorContext
             }
         }
 
-        var values = new double[_candles.Count];
+        var values = new double[_data.Count];
 
-        if (_candles.Count > 0)
+        if (_data.Count > 0)
         {
             var multiplier = 2.0 / (period + 1.0);
-            var ema = _candles[0].Close;
+            var ema = Close(0);
             values[0] = ema;
 
-            for (var i = 1; i < _candles.Count; i++)
+            for (var i = 1; i < _data.Count; i++)
             {
-                ema = ((_candles[i].Close - ema) * multiplier) + ema;
+                ema = ((Close(i) - ema) * multiplier) + ema;
                 values[i] = ema;
             }
         }
@@ -85,9 +137,9 @@ public sealed class IndicatorContext
             }
         }
 
-        var values = new double[_candles.Count];
+        var values = new double[_data.Count];
 
-        for (var i = 0; i < _candles.Count; i++)
+        for (var i = 0; i < _data.Count; i++)
         {
             var start = Math.Max(0, i - period + 1);
             var count = i - start + 1;
@@ -95,7 +147,7 @@ public sealed class IndicatorContext
 
             for (var j = start; j <= i; j++)
             {
-                sum += _candles[j].Close;
+                sum += Close(j);
             }
 
             values[i] = sum / count;
@@ -117,16 +169,16 @@ public sealed class IndicatorContext
             }
         }
 
-        var values = new double[_candles.Count];
+        var values = new double[_data.Count];
 
-        if (_candles.Count > 1)
+        if (_data.Count > 1)
         {
-            var gains = new double[_candles.Count];
-            var losses = new double[_candles.Count];
+            var gains = new double[_data.Count];
+            var losses = new double[_data.Count];
 
-            for (var i = 1; i < _candles.Count; i++)
+            for (var i = 1; i < _data.Count; i++)
             {
-                var change = _candles[i].Close - _candles[i - 1].Close;
+                var change = Close(i) - Close(i - 1);
                 gains[i] = change > 0 ? change : 0;
                 losses[i] = change < 0 ? -change : 0;
             }
@@ -134,7 +186,7 @@ public sealed class IndicatorContext
             var avgGain = 0.0;
             var avgLoss = 0.0;
 
-            for (var i = 1; i <= period && i < _candles.Count; i++)
+            for (var i = 1; i <= period && i < _data.Count; i++)
             {
                 avgGain += gains[i];
                 avgLoss += losses[i];
@@ -144,7 +196,7 @@ public sealed class IndicatorContext
 
             values[period] = avgLoss == 0 ? 100 : 100 - (100 / (1 + avgGain / avgLoss));
 
-            for (var i = period + 1; i < _candles.Count; i++)
+            for (var i = period + 1; i < _data.Count; i++)
             {
                 avgGain = (avgGain * (period - 1) + gains[i]) / period;
                 avgLoss = (avgLoss * (period - 1) + losses[i]) / period;
@@ -168,30 +220,30 @@ public sealed class IndicatorContext
             }
         }
 
-        var values = new double[_candles.Count];
+        var values = new double[_data.Count];
 
-        if (_candles.Count > 0)
+        if (_data.Count > 0)
         {
-            var trueRanges = new double[_candles.Count];
+            var trueRanges = new double[_data.Count];
 
-            trueRanges[0] = _candles[0].High - _candles[0].Low;
+            trueRanges[0] = High(0) - Low(0);
 
-            for (var i = 1; i < _candles.Count; i++)
+            for (var i = 1; i < _data.Count; i++)
             {
-                var highLow = _candles[i].High - _candles[i].Low;
-                var highClose = Math.Abs(_candles[i].High - _candles[i - 1].Close);
-                var lowClose = Math.Abs(_candles[i].Low - _candles[i - 1].Close);
+                var highLow = High(i) - Low(i);
+                var highClose = Math.Abs(High(i) - Close(i - 1));
+                var lowClose = Math.Abs(Low(i) - Close(i - 1));
                 trueRanges[i] = Math.Max(highLow, Math.Max(highClose, lowClose));
             }
 
             var sum = 0.0;
-            for (var i = 0; i < period && i < _candles.Count; i++)
+            for (var i = 0; i < period && i < _data.Count; i++)
             {
                 sum += trueRanges[i];
             }
             values[period - 1] = sum / period;
 
-            for (var i = period; i < _candles.Count; i++)
+            for (var i = period; i < _data.Count; i++)
             {
                 values[i] = (values[i - 1] * (period - 1) + trueRanges[i]) / period;
             }
@@ -213,32 +265,32 @@ public sealed class IndicatorContext
             }
         }
 
-        var plusDm = new double[_candles.Count];
-        var minusDm = new double[_candles.Count];
+        var plusDm = new double[_data.Count];
+        var minusDm = new double[_data.Count];
 
-        for (var i = 1; i < _candles.Count; i++)
+        for (var i = 1; i < _data.Count; i++)
         {
-            var highDiff = _candles[i].High - _candles[i - 1].High;
-            var lowDiff = _candles[i - 1].Low - _candles[i].Low;
+            var highDiff = High(i) - High(i - 1);
+            var lowDiff = Low(i - 1) - Low(i);
 
             plusDm[i] = (highDiff > lowDiff && highDiff > 0) ? highDiff : 0;
             minusDm[i] = (lowDiff > highDiff && lowDiff > 0) ? lowDiff : 0;
         }
 
         var atr = GetAtr(period);
-        var plusDi = new double[_candles.Count];
-        var minusDi = new double[_candles.Count];
+        var plusDi = new double[_data.Count];
+        var minusDi = new double[_data.Count];
 
         var smoothedPlusDm = 0.0;
         var smoothedMinusDm = 0.0;
 
-        for (var i = 0; i < period && i < _candles.Count; i++)
+        for (var i = 0; i < period && i < _data.Count; i++)
         {
             smoothedPlusDm += plusDm[i];
             smoothedMinusDm += minusDm[i];
         }
 
-        for (var i = period - 1; i < _candles.Count; i++)
+        for (var i = period - 1; i < _data.Count; i++)
         {
             if (i > period - 1)
             {
@@ -250,24 +302,24 @@ public sealed class IndicatorContext
             minusDi[i] = atr[i] > 0 ? (smoothedMinusDm / atr[i]) * 100 : 0;
         }
 
-        var dx = new double[_candles.Count];
-        for (var i = 0; i < _candles.Count; i++)
+        var dx = new double[_data.Count];
+        for (var i = 0; i < _data.Count; i++)
         {
             var diSum = plusDi[i] + minusDi[i];
             dx[i] = diSum > 0 ? (Math.Abs(plusDi[i] - minusDi[i]) / diSum) * 100 : 0;
         }
 
-        var adxValues = new double[_candles.Count];
+        var adxValues = new double[_data.Count];
         var sum = 0.0;
-        for (var i = period - 1; i < period * 2 - 1 && i < _candles.Count; i++)
+        for (var i = period - 1; i < period * 2 - 1 && i < _data.Count; i++)
         {
             sum += dx[i];
         }
-        if (_candles.Count > period * 2 - 2)
+        if (_data.Count > period * 2 - 2)
         {
             adxValues[period * 2 - 2] = sum / period;
 
-            for (var i = period * 2 - 1; i < _candles.Count; i++)
+            for (var i = period * 2 - 1; i < _data.Count; i++)
             {
                 adxValues[i] = (adxValues[i - 1] * (period - 1) + dx[i]) / period;
             }
@@ -290,15 +342,15 @@ public sealed class IndicatorContext
             }
         }
 
-        var values = new double[_candles.Count];
-        var typicalPrices = new double[_candles.Count];
+        var values = new double[_data.Count];
+        var typicalPrices = new double[_data.Count];
 
-        for (var i = 0; i < _candles.Count; i++)
+        for (var i = 0; i < _data.Count; i++)
         {
-            typicalPrices[i] = (_candles[i].High + _candles[i].Low + _candles[i].Close) / 3.0;
+            typicalPrices[i] = (High(i) + Low(i) + Close(i)) / 3.0;
         }
 
-        for (var i = 0; i < _candles.Count; i++)
+        for (var i = 0; i < _data.Count; i++)
         {
             var start = Math.Max(0, i - period + 1);
             var count = i - start + 1;
@@ -337,9 +389,9 @@ public sealed class IndicatorContext
             }
         }
 
-        var values = new double[_candles.Count];
+        var values = new double[_data.Count];
 
-        for (var i = 0; i < _candles.Count; i++)
+        for (var i = 0; i < _data.Count; i++)
         {
             var start = Math.Max(0, i - period + 1);
             var high = double.MinValue;
@@ -347,12 +399,12 @@ public sealed class IndicatorContext
 
             for (var j = start; j <= i; j++)
             {
-                if (_candles[j].High > high) high = _candles[j].High;
-                if (_candles[j].Low < low) low = _candles[j].Low;
+                if (High(j) > high) high = High(j);
+                if (Low(j) < low) low = Low(j);
             }
 
             var range = high - low;
-            values[i] = range > 0 ? ((high - _candles[i].Close) / range) * -100 : 0;
+            values[i] = range > 0 ? ((high - Close(i)) / range) * -100 : 0;
         }
 
         _williamsRs.Add(new WilliamsRIndicator(period, values));
@@ -366,21 +418,21 @@ public sealed class IndicatorContext
             return _obvs[0].Values;
         }
 
-        var values = new double[_candles.Count];
+        var values = new double[_data.Count];
 
-        if (_candles.Count > 0)
+        if (_data.Count > 0)
         {
-            values[0] = _candles[0].Volume;
+            values[0] = Volume(0);
 
-            for (var i = 1; i < _candles.Count; i++)
+            for (var i = 1; i < _data.Count; i++)
             {
-                if (_candles[i].Close > _candles[i - 1].Close)
+                if (Close(i) > Close(i - 1))
                 {
-                    values[i] = values[i - 1] + _candles[i].Volume;
+                    values[i] = values[i - 1] + Volume(i);
                 }
-                else if (_candles[i].Close < _candles[i - 1].Close)
+                else if (Close(i) < Close(i - 1))
                 {
-                    values[i] = values[i - 1] - _candles[i].Volume;
+                    values[i] = values[i - 1] - Volume(i);
                 }
                 else
                 {
@@ -405,20 +457,20 @@ public sealed class IndicatorContext
             }
         }
 
-        var values = new double[_candles.Count];
+        var values = new double[_data.Count];
 
-        if (_candles.Count > 1)
+        if (_data.Count > 1)
         {
-            var typicalPrices = new double[_candles.Count];
-            var moneyFlows = new double[_candles.Count];
+            var typicalPrices = new double[_data.Count];
+            var moneyFlows = new double[_data.Count];
 
-            for (var i = 0; i < _candles.Count; i++)
+            for (var i = 0; i < _data.Count; i++)
             {
-                typicalPrices[i] = (_candles[i].High + _candles[i].Low + _candles[i].Close) / 3.0;
-                moneyFlows[i] = typicalPrices[i] * _candles[i].Volume;
+                typicalPrices[i] = (High(i) + Low(i) + Close(i)) / 3.0;
+                moneyFlows[i] = typicalPrices[i] * Volume(i);
             }
 
-            for (var i = period; i < _candles.Count; i++)
+            for (var i = period; i < _data.Count; i++)
             {
                 var positiveFlow = 0.0;
                 var negativeFlow = 0.0;
@@ -468,18 +520,18 @@ public sealed class IndicatorContext
             }
         }
 
-        var values = new double[_candles.Count];
+        var values = new double[_data.Count];
 
-        if (_candles.Count > 1)
+        if (_data.Count > 1)
         {
-            var isUptrend = _candles[1].Close > _candles[0].Close;
-            var sar = isUptrend ? _candles[0].Low : _candles[0].High;
-            var ep = isUptrend ? _candles[1].High : _candles[1].Low;
+            var isUptrend = Close(1) > Close(0);
+            var sar = isUptrend ? Low(0) : High(0);
+            var ep = isUptrend ? High(1) : Low(1);
             var af = accelerationFactor;
 
             values[0] = sar;
 
-            for (var i = 1; i < _candles.Count; i++)
+            for (var i = 1; i < _data.Count; i++)
             {
                 sar = sar + af * (ep - sar);
 
@@ -487,21 +539,21 @@ public sealed class IndicatorContext
                 {
                     if (i > 1)
                     {
-                        sar = Math.Min(sar, Math.Min(_candles[i - 1].Low, _candles[i - 2].Low));
+                        sar = Math.Min(sar, Math.Min(Low(i - 1), Low(i - 2)));
                     }
 
-                    if (_candles[i].Low < sar)
+                    if (Low(i) < sar)
                     {
                         isUptrend = false;
                         sar = ep;
-                        ep = _candles[i].Low;
+                        ep = Low(i);
                         af = accelerationFactor;
                     }
                     else
                     {
-                        if (_candles[i].High > ep)
+                        if (High(i) > ep)
                         {
-                            ep = _candles[i].High;
+                            ep = High(i);
                             af = Math.Min(af + accelerationFactor, maxAcceleration);
                         }
                     }
@@ -510,21 +562,21 @@ public sealed class IndicatorContext
                 {
                     if (i > 1)
                     {
-                        sar = Math.Max(sar, Math.Max(_candles[i - 1].High, _candles[i - 2].High));
+                        sar = Math.Max(sar, Math.Max(High(i - 1), High(i - 2)));
                     }
 
-                    if (_candles[i].High > sar)
+                    if (High(i) > sar)
                     {
                         isUptrend = true;
                         sar = ep;
-                        ep = _candles[i].High;
+                        ep = High(i);
                         af = accelerationFactor;
                     }
                     else
                     {
-                        if (_candles[i].Low < ep)
+                        if (Low(i) < ep)
                         {
-                            ep = _candles[i].Low;
+                            ep = Low(i);
                             af = Math.Min(af + accelerationFactor, maxAcceleration);
                         }
                     }
@@ -553,21 +605,21 @@ public sealed class IndicatorContext
             }
         }
 
-        var tenkanSen = new double[_candles.Count];
-        var kijunSen = new double[_candles.Count];
-        var senkouSpanA = new double[_candles.Count];
-        var senkouSpanB = new double[_candles.Count];
-        var chikouSpan = new double[_candles.Count];
+        var tenkanSen = new double[_data.Count];
+        var kijunSen = new double[_data.Count];
+        var senkouSpanA = new double[_data.Count];
+        var senkouSpanB = new double[_data.Count];
+        var chikouSpan = new double[_data.Count];
 
-        for (var i = 0; i < _candles.Count; i++)
+        for (var i = 0; i < _data.Count; i++)
         {
             var tenkanStart = Math.Max(0, i - tenkanPeriod + 1);
             var tenkanHigh = double.MinValue;
             var tenkanLow = double.MaxValue;
             for (var j = tenkanStart; j <= i; j++)
             {
-                if (_candles[j].High > tenkanHigh) tenkanHigh = _candles[j].High;
-                if (_candles[j].Low < tenkanLow) tenkanLow = _candles[j].Low;
+                if (High(j) > tenkanHigh) tenkanHigh = High(j);
+                if (Low(j) < tenkanLow) tenkanLow = Low(j);
             }
             tenkanSen[i] = (tenkanHigh + tenkanLow) / 2.0;
 
@@ -576,8 +628,8 @@ public sealed class IndicatorContext
             var kijunLow = double.MaxValue;
             for (var j = kijunStart; j <= i; j++)
             {
-                if (_candles[j].High > kijunHigh) kijunHigh = _candles[j].High;
-                if (_candles[j].Low < kijunLow) kijunLow = _candles[j].Low;
+                if (High(j) > kijunHigh) kijunHigh = High(j);
+                if (Low(j) < kijunLow) kijunLow = Low(j);
             }
             kijunSen[i] = (kijunHigh + kijunLow) / 2.0;
 
@@ -586,21 +638,21 @@ public sealed class IndicatorContext
             var senkouBLow = double.MaxValue;
             for (var j = senkouBStart; j <= i; j++)
             {
-                if (_candles[j].High > senkouBHigh) senkouBHigh = _candles[j].High;
-                if (_candles[j].Low < senkouBLow) senkouBLow = _candles[j].Low;
+                if (High(j) > senkouBHigh) senkouBHigh = High(j);
+                if (Low(j) < senkouBLow) senkouBLow = Low(j);
             }
             var senkouBValue = (senkouBHigh + senkouBLow) / 2.0;
 
             var senkouAValue = (tenkanSen[i] + kijunSen[i]) / 2.0;
 
             var senkouAIndex = i + kijunPeriod;
-            if (senkouAIndex < _candles.Count)
+            if (senkouAIndex < _data.Count)
             {
                 senkouSpanA[senkouAIndex] = senkouAValue;
             }
 
             var senkouBIndex = i + kijunPeriod;
-            if (senkouBIndex < _candles.Count)
+            if (senkouBIndex < _data.Count)
             {
                 senkouSpanB[senkouBIndex] = senkouBValue;
             }
@@ -608,7 +660,7 @@ public sealed class IndicatorContext
             var chikouIndex = i - kijunPeriod;
             if (chikouIndex >= 0)
             {
-                chikouSpan[chikouIndex] = _candles[i].Close;
+                chikouSpan[chikouIndex] = Close(i);
             }
         }
 
@@ -632,10 +684,10 @@ public sealed class IndicatorContext
         }
 
         var sma = GetSma(period);
-        var upper = new double[_candles.Count];
-        var lower = new double[_candles.Count];
+        var upper = new double[_data.Count];
+        var lower = new double[_data.Count];
 
-        for (var i = 0; i < _candles.Count; i++)
+        for (var i = 0; i < _data.Count; i++)
         {
             var start = Math.Max(0, i - period + 1);
             var count = i - start + 1;
@@ -643,7 +695,7 @@ public sealed class IndicatorContext
 
             for (var j = start; j <= i; j++)
             {
-                var diff = _candles[j].Close - sma[i];
+                var diff = Close(j) - sma[i];
                 sumSquares += diff * diff;
             }
 
@@ -671,9 +723,9 @@ public sealed class IndicatorContext
             }
         }
 
-        var kValues = new double[_candles.Count];
+        var kValues = new double[_data.Count];
 
-        for (var i = 0; i < _candles.Count; i++)
+        for (var i = 0; i < _data.Count; i++)
         {
             var start = Math.Max(0, i - kPeriod + 1);
             var high = double.MinValue;
@@ -681,16 +733,16 @@ public sealed class IndicatorContext
 
             for (var j = start; j <= i; j++)
             {
-                if (_candles[j].High > high) high = _candles[j].High;
-                if (_candles[j].Low < low) low = _candles[j].Low;
+                if (High(j) > high) high = High(j);
+                if (Low(j) < low) low = Low(j);
             }
 
             var range = high - low;
-            kValues[i] = range > 0 ? ((_candles[i].Close - low) / range) * 100 : 0;
+            kValues[i] = range > 0 ? ((Close(i) - low) / range) * 100 : 0;
         }
 
-        var dValues = new double[_candles.Count];
-        for (var i = 0; i < _candles.Count; i++)
+        var dValues = new double[_data.Count];
+        for (var i = 0; i < _data.Count; i++)
         {
             var start = Math.Max(0, i - dPeriod + 1);
             var sum = 0.0;
@@ -729,7 +781,7 @@ public sealed class IndicatorContext
         var fastEma = GetEma(fastPeriod);
         var slowEma = GetEma(slowPeriod);
 
-        var macdValues = new double[_candles.Count];
+        var macdValues = new double[_data.Count];
         for (var i = 0; i < macdValues.Length; i++)
         {
             macdValues[i] = fastEma[i] - slowEma[i];
@@ -749,7 +801,7 @@ public sealed class IndicatorContext
             }
         }
 
-        var histValues = new double[_candles.Count];
+        var histValues = new double[_data.Count];
         for (var i = 0; i < histValues.Length; i++)
         {
             histValues[i] = macdValues[i] - signalValues[i];

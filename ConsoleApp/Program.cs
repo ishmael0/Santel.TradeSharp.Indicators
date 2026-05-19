@@ -1,5 +1,5 @@
-﻿using Santel.TradeSharp.Indicators;
-using Santel.TradeSharp.Indicators.Models;
+﻿
+using Santel.TradeSharp.Indicators;
 
 Console.WriteLine("╔════════════════════════════════════════════════════════════════╗");
 Console.WriteLine("║    Santel.TradeSharp.Indicators - Technical Analysis Demo     ║");
@@ -16,7 +16,9 @@ Console.WriteLine($"Current Price: {candles[^1].Close:F2}");
 Console.WriteLine();
 
 // Initialize indicator context
-var context = new IndicatorContext(candles);
+var context = new IndicatorContext<Candle>(candles, c => c.Time, c => c.Open, c => c.High, c => c.Low, c => c.Close, c => c.Volume);
+//OR if your model is Candle just use
+//var context = new IndicatorContext(candles);
 
 // ═══════════════════════════════════════════════════════════════
 // TREND INDICATORS
@@ -237,6 +239,7 @@ Console.WriteLine("════════════════════�
 // HELPER FUNCTIONS
 // ═══════════════════════════════════════════════════════════════
 
+
 static List<Candle> GenerateSampleCandles(int count)
 {
     var candles = new List<Candle>();
@@ -250,10 +253,10 @@ static List<Candle> GenerateSampleCandles(int count)
         var trend = Math.Sin(i / 10.0) * 0.5; // Cyclical trend
         var volatility = random.NextDouble() - 0.5;
         var change = trend + volatility;
-        
+
         price += change;
         price = Math.Max(90, Math.Min(110, price)); // Keep price in range
-        
+
         var open = price + (random.NextDouble() - 0.5) * 0.5;
         var close = price + (random.NextDouble() - 0.5) * 0.5;
         var high = Math.Max(open, close) + random.NextDouble() * 0.8;
@@ -289,4 +292,6 @@ static string? DetectMacdCrossover(Santel.TradeSharp.Indicators.Indicators.MacdS
 
     return null;
 }
+
+
 
