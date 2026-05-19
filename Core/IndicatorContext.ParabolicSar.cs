@@ -73,4 +73,92 @@ public partial class IndicatorContext<T>
         _parabolicSars.Add(new Indicators.ParabolicSarIndicator(accelerationFactor, maxAcceleration, values));
         return values;
     }
+
+    /// <summary>
+    /// Returns Parabolic SAR value for a specific point in time.
+    /// If the full array is already cached, the result is a direct index lookup (O(1)).
+    /// Otherwise, iterates from bar 0 up to the target bar only.
+    /// </summary>
+    /// <param name="accelerationFactor">The acceleration factor step.</param>
+    /// <param name="maxAcceleration">The maximum acceleration factor.</param>
+    /// <param name="offset">How many bars back from the latest bar. 0 = current bar, 1 = one bar ago, etc.</param>
+    public double GetParabolicSar(int offset, double accelerationFactor = 0.02, double maxAcceleration = 0.2)
+    {
+        if (offset < 0) throw new ArgumentOutOfRangeException(nameof(offset));
+
+        var targetIndex = _data.Count - 1 - offset;
+        if (targetIndex < 0) throw new ArgumentOutOfRangeException(nameof(offset), "Offset exceeds available data.");
+
+        // Fast path: full array already cached — just index into it.
+        for (var i = 0; i < _parabolicSars.Count; i++)
+        {
+            var existing = _parabolicSars[i];
+            if (existing.AccelerationFactor == accelerationFactor && existing.MaxAcceleration == maxAcceleration)
+                return existing.Values[targetIndex];
+        }
+
+        // Slow path: compute inline up to targetIndex only.
+        if (targetIndex == 0) return Low(0);
+        if (_data.Count <= 1) return 0;
+
+        var isUptrend = Close(1) > Close(0);
+        var sar = isUptrend ? Low(0) : High(0);
+        var ep = isUptrend ? High(1) : Low(1);
+        var af = accelerationFactor;
+
+        for (var i = 1; i <= targetIndex; i++)
+        {
+            sar = sar + af * (ep - sar);
+
+            if (isUptrend)
+            {
+                if (i > 1)
+                    sar = Math.Min(sar, Math.Min(Low(i - 1), Low(i - 2)));
+
+                if (Low(i) < sar)
+                {
+                    isUptrend = false;
+                    sar = ep;
+                    ep = Low(i);
+                    af = accelerationFactor;
+                }
+                else if (High(i) > ep)
+                {
+                    ep = High(i);
+                    af = Math.Min(af + accelerationFactor, maxAcceleration);
+                }
+            }
+            else
+            {
+                if (i > 1)
+                    sar = Math.Max(sar, Math.Max(High(i - 1), High(i - 2)));
+
+                if (High(i) > sar)
+                {
+                    isUptrend = true;
+                    sar = ep;
+                    ep = High(i);
+                    af = accelerationFactor;
+                }
+                else if (Low(i) < ep)
+                {
+                    ep = Low(i);
+                    af = Math.Min(af + accelerationFactor, maxAcceleration);
+                }
+            }
+        }
+
+        return sar;
+    }
+
+    /// <summary>
+    /// Returns the Parabolic SAR value at <paramref name="offset"/> bars back,
+    /// computed over a custom data list instead of the context data.
+    /// </summary>
+    /// <param name="data">External bar data to compute Parabolic SAR on.</param>
+    /// <param name="offset">How many bars back from the latest bar. 0 = current bar, 1 = one bar ago, etc.</param>
+    /// <param name="accelerationFactor">The acceleration factor step.</param>
+    /// <param name="maxAcceleration">The maximum acceleration factor.</param>
+    public double GetParabolicSar(IReadOnlyList<T> data, int offset, double accelerationFactor = 0.02, double maxAcceleration = 0.2)
+        => new IndicatorContext<T>(data, _time, _open, _high, _low, _close, _volume).GetParabolicSar(offset, accelerationFactor, maxAcceleration);
 }

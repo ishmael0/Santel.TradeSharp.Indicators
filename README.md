@@ -9,6 +9,8 @@ A high-performance .NET library for calculating technical analysis indicators on
 - **Time Aligned**: All indicator values are aligned by index with source candle data
 - **Generic Support**: Works with any custom OHLCV model via `IndicatorContext<T>`
 - **Easy to Use**: Simple, intuitive API with method chaining support
+- **Point-in-Time Queries**: Single-value offset overloads skip full-array allocation when possible
+- **External Data Overloads**: Compute any indicator over an arbitrary data slice without a separate context
 
 ## Supported Indicators
 
@@ -21,7 +23,7 @@ A high-performance .NET library for calculating technical analysis indicators on
 - **Ichimoku Cloud**: Comprehensive trend-following system with support/resistance zones
 
 ### Momentum Indicators
-- **RSI (Relative Strength Index)**: Measures speed and magnitude of price changes (0-100)
+- **RSI (Relative Strength Index)**: Measures speed and magnitude of price changes (0–100)
 - **Stochastic Oscillator**: Compares closing price to price range over time
 - **CCI (Commodity Channel Index)**: Measures deviation from statistical mean
 - **Williams %R**: Momentum indicator showing overbought/oversold levels
@@ -82,6 +84,14 @@ var currentEma = ema12[^1];
 var currentRsi = rsi14[^1];
 var currentMacd = macd.Macd[^1];
 var upperBand = bb.Upper[^1];
+
+// Point-in-time queries — O(1) if full array is already cached
+double emaYesterday = context.GetEma(12, offset: 1);
+double rsiNow       = context.GetRsi(14, offset: 0);
+
+// External-data overload — compute over an arbitrary slice
+IReadOnlyList<Candle> slice = candles.TakeLast(50).ToList();
+double sliceEma = context.GetEma(slice, period: 12, offset: 0);
 ```
 
 ### Using a custom OHLCV model
@@ -148,74 +158,126 @@ IReadOnlyList<StochasticIndicator>     Stochastics
 IReadOnlyList<MacdIndicator>           Macds
 ```
 
-#### Methods
+---
 
-##### Trend Indicators
+### Methods
 
-```csharp
-double[] GetEma(int period)
-// Returns: EMA values for each data point
+Every indicator exposes **three overloads**:
 
-double[] GetSma(int period)
-// Returns: SMA values for each data point
+| Overload | Returns | Description |
+|---|---|---|
+| `GetXxx(params)` | full array / series | Calculates and **caches** the complete result |
+| `GetXxx(params, int offset)` | single value / tuple | Point-in-time query — O(1) cache hit, otherwise computes only up to the target bar |
+| `GetXxx(IReadOnlyList<T> data, params, int offset)` | single value / tuple | Same point-in-time query over an **external data list** (no caching) |
 
-MacdSeries GetMacd(int fastPeriod, int slowPeriod, int signalPeriod)
-// Returns: MacdSeries with Macd, Signal, and Histogram arrays
-// Constraint: fastPeriod must be less than slowPeriod
+`offset` counts back from the latest bar: `0` = current bar, `1` = one bar ago, etc.
 
-Adx GetAdx(int period)
-// Returns: Adx with Values (ADX), PlusDi (+DI), and MinusDi (-DI) arrays
+---
 
-double[] GetParabolicSar(double accelerationFactor = 0.02, double maxAcceleration = 0.2)
-// Returns: Parabolic SAR values for each data point
-
-Ichimoku GetIchimoku(int tenkanPeriod = 9, int kijunPeriod = 26, int senkouSpanBPeriod = 52)
-// Returns: Ichimoku with TenkanSen, KijunSen, SenkouSpanA, SenkouSpanB, ChikouSpan arrays
-// Note: Cloud spans are shifted forward, Chikou is shifted backward
-```
-
-##### Momentum Indicators
+#### Trend Indicators
 
 ```csharp
-double[] GetRsi(int period)
-// Returns: RSI values (0-100) for each data point
+// EMA
+double[]  GetEma(int period)
+double    GetEma(int period, int offset)
+double    GetEma(IReadOnlyList<T> data, int period, int offset)
 
-Stochastic GetStochastic(int kPeriod, int dPeriod)
-// Returns: Stochastic with K and D arrays
+// SMA
+double[]  GetSma(int period)
+double    GetSma(int period, int offset)
+double    GetSma(IReadOnlyList<T> data, int period, int offset)
 
-double[] GetCci(int period)
-// Returns: CCI values for each data point
+// MACD — fastPeriod must be less than slowPeriod
+MacdSeries                          GetMacd(int fastPeriod, int slowPeriod, int signalPeriod)
+(double Macd, double Signal,
+ double Histogram)                  GetMacd(int fastPeriod, int slowPeriod, int signalPeriod, int offset)
+(double Macd, double Signal,
+ double Histogram)                  GetMacd(IReadOnlyList<T> data, int fastPeriod, int slowPeriod, int signalPeriod, int offset)
 
-double[] GetWilliamsR(int period)
-// Returns: Williams %R values for each data point
+// ADX
+Adx                                 GetAdx(int period)
+(double Adx, double PlusDi,
+ double MinusDi)                    GetAdx(int period, int offset)
+(double Adx, double PlusDi,
+ double MinusDi)                    GetAdx(IReadOnlyList<T> data, int period, int offset)
 
-double[] GetMfi(int period)
-// Returns: MFI values (0-100) for each data point
+// Parabolic SAR
+double[]  GetParabolicSar(double accelerationFactor = 0.02, double maxAcceleration = 0.2)
+double    GetParabolicSar(int offset, double accelerationFactor = 0.02, double maxAcceleration = 0.2)
+double    GetParabolicSar(IReadOnlyList<T> data, int offset, double accelerationFactor = 0.02, double maxAcceleration = 0.2)
+
+// Ichimoku Cloud
+Ichimoku                                        GetIchimoku(int tenkanPeriod = 9, int kijunPeriod = 26, int senkouSpanBPeriod = 52)
+(double TenkanSen, double KijunSen,
+ double SenkouSpanA, double SenkouSpanB,
+ double ChikouSpan)                             GetIchimoku(int offset, int tenkanPeriod = 9, int kijunPeriod = 26, int senkouSpanBPeriod = 52)
+(double TenkanSen, double KijunSen,
+ double SenkouSpanA, double SenkouSpanB,
+ double ChikouSpan)                             GetIchimoku(IReadOnlyList<T> data, int offset, int tenkanPeriod = 9, int kijunPeriod = 26, int senkouSpanBPeriod = 52)
 ```
 
-##### Volatility Indicators
+#### Momentum Indicators
 
 ```csharp
-double[] GetAtr(int period)
-// Returns: ATR values for each data point
+// RSI
+double[]  GetRsi(int period)
+double    GetRsi(int period, int offset)
+double    GetRsi(IReadOnlyList<T> data, int period, int offset)
 
-BollingerBands GetBollingerBands(int period, double standardDeviation = 2.0)
-// Returns: BollingerBands with Upper, Middle, and Lower arrays
+// Stochastic
+Stochastic                    GetStochastic(int kPeriod, int dPeriod)
+(double K, double D)          GetStochastic(int kPeriod, int dPeriod, int offset)
+(double K, double D)          GetStochastic(IReadOnlyList<T> data, int kPeriod, int dPeriod, int offset)
+
+// CCI
+double[]  GetCci(int period)
+double    GetCci(int period, int offset)
+double    GetCci(IReadOnlyList<T> data, int period, int offset)
+
+// Williams %R
+double[]  GetWilliamsR(int period)
+double    GetWilliamsR(int period, int offset)
+double    GetWilliamsR(IReadOnlyList<T> data, int period, int offset)
+
+// MFI
+double[]  GetMfi(int period)
+double    GetMfi(int period, int offset)
+double    GetMfi(IReadOnlyList<T> data, int period, int offset)
 ```
 
-##### Volume Indicators
+#### Volatility Indicators
 
 ```csharp
-double[] GetObv()
-// Returns: OBV values for each data point (cumulative volume)
+// ATR
+double[]  GetAtr(int period)
+double    GetAtr(int period, int offset)
+double    GetAtr(IReadOnlyList<T> data, int period, int offset)
+
+// Bollinger Bands
+BollingerBands                            GetBollingerBands(int period, double standardDeviation = 2.0)
+(double Upper, double Middle,
+ double Lower)                            GetBollingerBands(int period, int offset, double standardDeviation = 2.0)
+(double Upper, double Middle,
+ double Lower)                            GetBollingerBands(IReadOnlyList<T> data, int period, int offset, double standardDeviation = 2.0)
 ```
+
+#### Volume Indicators
+
+```csharp
+// OBV
+double[]  GetObv()
+double    GetObv(int offset)
+double    GetObv(IReadOnlyList<T> data, int offset)
+```
+
+---
 
 ## Data Alignment
 
 ### Index Alignment
-Most indicators maintain direct index alignment with the source data:
+All indicators maintain direct index alignment with the source data:
 ```csharp
-indicator[i] corresponds to data[i] at the same timestamp
+indicator[i]  // corresponds to data[i] at the same timestamp
 ```
 
 ### Ichimoku Cloud Exception
@@ -226,58 +288,42 @@ Ichimoku components have intentional offsets:
 
 This is by design — the cloud projects future support/resistance zones.
 
+---
+
 ## Caching Strategy
 
-The `IndicatorContext` automatically caches all calculated indicators. When you call a Get method:
-
-1. **Check cache**: If indicator with same parameters exists, return cached result
-2. **Calculate**: If not found, calculate the indicator
-3. **Store**: Add to cache for future use
-4. **Return**: Return the calculated values
+The `IndicatorContext` automatically caches all full-array calculations.
 
 ```csharp
-var ema1 = context.GetEma(12);  // Calculates
-var ema2 = context.GetEma(12);  // Returns cached — no recalculation
+var ema1 = context.GetEma(12);  // Calculates and caches
+var ema2 = context.GetEma(12);  // Returns cached — zero recomputation
+```
+
+### Point-in-Time Query Behaviour
+
+When calling an offset overload (e.g. `GetEma(12, offset: 3)`):
+
+1. **Fast path** — if the full array for that period is already cached, the result is a plain array index lookup: **O(1)**.
+2. **Slow path** — if not cached, computation stops at the target bar. Window-based indicators (SMA, CCI, Williams %R, MFI) only iterate their rolling window, so the slow path is **O(period)**. State-dependent indicators (EMA, RSI, ATR, OBV, Parabolic SAR) iterate from bar 0 to the target bar, so it is **O(targetIndex)** — still never more than the full O(n) path.
+
+```csharp
+// Slow path — iterates bars 0..targetIndex only
+double rsi = context.GetRsi(14, offset: 5);
+
+// Fast path — O(1) index lookup, full array was computed above
+var _ = context.GetRsi(14);          // caches full array
+double rsiAgain = context.GetRsi(14, offset: 5);
 ```
 
 ### Dependency Reuse
 Indicators that depend on others automatically reuse cached calculations:
+
 ```csharp
-var macd = context.GetMacd(12, 26, 9);  // Calculates EMA(12) and EMA(26)
-var ema12 = context.GetEma(12);         // Returns cached EMA(12) — already calculated by MACD
+var macd  = context.GetMacd(12, 26, 9);  // Calculates and caches EMA(12) and EMA(26)
+var ema12 = context.GetEma(12);          // Returns already-cached EMA(12) — O(1)
 ```
 
-## Project Structure
-
-```
-Santel.TradeSharp.Indicators/
-├── Core/                                # Class library (Core.csproj)
-│   ├── Models/
-│   │   └── Candle.cs                    # OHLCV candle data model
-│   ├── Indicators/
-│   │   ├── EmaIndicator.cs
-│   │   ├── SmaIndicator.cs
-│   │   ├── RsiIndicator.cs
-│   │   ├── AtrIndicator.cs
-│   │   ├── AdxIndicator.cs
-│   │   ├── Adx.cs
-│   │   ├── CciIndicator.cs
-│   │   ├── WilliamsRIndicator.cs
-│   │   ├── ObvIndicator.cs
-│   │   ├── MfiIndicator.cs
-│   │   ├── ParabolicSarIndicator.cs
-│   │   ├── IchimokuIndicator.cs
-│   │   ├── Ichimoku.cs
-│   │   ├── BollingerBandsIndicator.cs
-│   │   ├── BollingerBands.cs
-│   │   ├── StochasticIndicator.cs
-│   │   ├── Stochastic.cs
-│   │   ├── MacdIndicator.cs
-│   │   └── MacdSeries.cs
-│   └── IndicatorContext.cs              # Main calculation context (generic + Candle convenience class)
-└── ConsoleApp/                          # Demo console application (ConsoleApp.csproj)
-    └── Program.cs                       # Example usage
-```
+---
 
 ## Examples
 
@@ -292,10 +338,36 @@ Console.WriteLine($"Current SMA(20): {sma20[^1]:F2}");
 
 // Relative Strength Index
 var rsi14 = context.GetRsi(14);
-if (rsi14[^1] > 70)
-    Console.WriteLine("Overbought");
-else if (rsi14[^1] < 30)
-    Console.WriteLine("Oversold");
+if (rsi14[^1] > 70)      Console.WriteLine("Overbought");
+else if (rsi14[^1] < 30) Console.WriteLine("Oversold");
+```
+
+### Point-in-Time Queries
+
+```csharp
+// Ask for a single value without building the full array
+double currentRsi  = context.GetRsi(14, offset: 0);
+double previousRsi = context.GetRsi(14, offset: 1);
+
+// Multi-value indicators return named tuples
+var (adx, plusDi, minusDi) = context.GetAdx(14, offset: 0);
+var (upper, mid, lower)    = context.GetBollingerBands(20, offset: 0);
+var (macd, signal, hist)   = context.GetMacd(12, 26, 9, offset: 0);
+var (k, d)                 = context.GetStochastic(14, 3, offset: 0);
+var (tenkan, kijun, spanA, spanB, chikou) = context.GetIchimoku(offset: 0);
+```
+
+### External Data Overload
+
+```csharp
+// Compute an indicator over a custom slice without a separate context
+IReadOnlyList<Candle> recentBars = candles.TakeLast(100).ToList();
+
+double ema    = context.GetEma(recentBars, period: 20, offset: 0);
+double rsi    = context.GetRsi(recentBars, period: 14, offset: 0);
+double atr    = context.GetAtr(recentBars, period: 14, offset: 0);
+double obv    = context.GetObv(recentBars, offset: 0);
+double psar   = context.GetParabolicSar(recentBars, offset: 0);
 ```
 
 ### MACD Crossover Strategy
@@ -303,30 +375,21 @@ else if (rsi14[^1] < 30)
 ```csharp
 var macd = context.GetMacd(12, 26, 9);
 
-var currentMacd   = macd.Macd[^1];
-var currentSignal = macd.Signal[^1];
-var previousMacd  = macd.Macd[^2];
-var previousSignal = macd.Signal[^2];
+bool bullishCross = macd.Macd[^1] > macd.Signal[^1] && macd.Macd[^2] <= macd.Signal[^2];
+bool bearishCross = macd.Macd[^1] < macd.Signal[^1] && macd.Macd[^2] >= macd.Signal[^2];
 
-if (currentMacd > currentSignal && previousMacd <= previousSignal)
-    Console.WriteLine("Bullish MACD crossover");
-else if (currentMacd < currentSignal && previousMacd >= previousSignal)
-    Console.WriteLine("Bearish MACD crossover");
+if (bullishCross) Console.WriteLine("Bullish MACD crossover");
+if (bearishCross) Console.WriteLine("Bearish MACD crossover");
 ```
 
 ### Bollinger Bands Breakout
 
 ```csharp
-var bb = context.GetBollingerBands(20, 2.0);
-
+var bb           = context.GetBollingerBands(20, 2.0);
 var currentPrice = candles[^1].Close;
-var upperBand    = bb.Upper[^1];
-var lowerBand    = bb.Lower[^1];
 
-if (currentPrice > upperBand)
-    Console.WriteLine("Price above upper band - potential overbought");
-else if (currentPrice < lowerBand)
-    Console.WriteLine("Price below lower band - potential oversold");
+if (currentPrice > bb.Upper[^1])  Console.WriteLine("Above upper band — potential overbought");
+if (currentPrice < bb.Lower[^1])  Console.WriteLine("Below lower band — potential oversold");
 ```
 
 ### Multiple Indicator Confluence
@@ -336,8 +399,8 @@ var rsi  = context.GetRsi(14);
 var macd = context.GetMacd(12, 26, 9);
 var adx  = context.GetAdx(14);
 
-var strongTrend      = adx.Values[^1] > 25;
-var bullishMomentum  = rsi[^1] > 50 && macd.Histogram[^1] > 0;
+bool strongTrend     = adx.Values[^1] > 25;
+bool bullishMomentum = rsi[^1] > 50 && macd.Histogram[^1] > 0;
 
 if (strongTrend && bullishMomentum)
     Console.WriteLine("Strong bullish signal");
@@ -351,40 +414,90 @@ context.GetEma(26);
 context.GetRsi(14);
 context.GetMacd(12, 26, 9);
 
-Console.WriteLine($"Total EMAs calculated:  {context.Emas.Count}");
-Console.WriteLine($"Total RSIs calculated:  {context.Rsis.Count}");
-Console.WriteLine($"Total MACDs calculated: {context.Macds.Count}");
+Console.WriteLine($"EMAs cached:  {context.Emas.Count}");
+Console.WriteLine($"RSIs cached:  {context.Rsis.Count}");
+Console.WriteLine($"MACDs cached: {context.Macds.Count}");
 
 foreach (var ema in context.Emas)
-    Console.WriteLine($"EMA({ema.Period}) cached with {ema.Values.Length} values");
+    Console.WriteLine($"EMA({ema.Period}) — {ema.Values.Length} values");
 ```
 
 ### Custom Model
 
 ```csharp
-// Your own bar type
 record MyBar(DateTime Ts, double O, double H, double L, double C, double V);
 
-var bars = FetchBars(); // IReadOnlyList<MyBar>
+var bars    = FetchBars(); // IReadOnlyList<MyBar>
 var context = new IndicatorContext<MyBar>(bars,
     b => b.Ts, b => b.O, b => b.H, b => b.L, b => b.C, b => b.V);
 
 var rsi = context.GetRsi(14);
 ```
 
+---
+
 ## Performance Considerations
 
 ### Memory Usage
-- Each indicator stores a `double[]` with length equal to the data count
-- Cached indicators persist for the lifetime of the `IndicatorContext`
-- For very long series (10,000+ data points), consider:
-  - Using multiple contexts for different time ranges
-  - Clearing and recreating context when indicator parameters change frequently
+- Each cached indicator stores a `double[]` of length equal to the data count
+- Cached results persist for the lifetime of the `IndicatorContext`
+- For very long series (10 000+ bars), consider multiple contexts for different time ranges
 
 ### Calculation Efficiency
-- First calculation: O(n) for most indicators where n = data count
-- Cached retrieval: O(1)
-- Dependent indicators (e.g., MACD uses EMA internally) automatically reuse existing calculations
+
+| Scenario | Cost |
+|---|---|
+| Full-array call (first time) | O(n) |
+| Full-array call (cached) | O(1) |
+| Offset call — cache hit | O(1) |
+| Offset call — window indicator (SMA, CCI, Williams %R, MFI) | O(period) |
+| Offset call — state indicator (EMA, RSI, ATR, OBV, Parabolic SAR) | O(targetIndex) ≤ O(n) |
+| External-data overload | O(targetIndex) |
+
+---
+
+## Project Structure
+
+```
+Santel.TradeSharp.Indicators/
+├── Core/                                # Class library (Core.csproj)
+│   ├── Models/
+│   │   └── Candle.cs
+│   ├── Indicators/
+│   │   ├── EmaIndicator.cs
+│   │   ├── SmaIndicator.cs
+│   │   ├── RsiIndicator.cs
+│   │   ├── AtrIndicator.cs
+│   │   ├── AdxIndicator.cs  /  Adx.cs
+│   │   ├── CciIndicator.cs
+│   │   ├── WilliamsRIndicator.cs
+│   │   ├── ObvIndicator.cs
+│   │   ├── MfiIndicator.cs
+│   │   ├── ParabolicSarIndicator.cs
+│   │   ├── IchimokuIndicator.cs  /  Ichimoku.cs
+│   │   ├── BollingerBandsIndicator.cs  /  BollingerBands.cs
+│   │   ├── StochasticIndicator.cs  /  Stochastic.cs
+│   │   └── MacdIndicator.cs  /  MacdSeries.cs
+│   ├── IndicatorContext.cs              # Core context + Candle convenience class
+│   ├── IndicatorContext.Ema.cs
+│   ├── IndicatorContext.Sma.cs
+│   ├── IndicatorContext.Rsi.cs
+│   ├── IndicatorContext.Atr.cs
+│   ├── IndicatorContext.Adx.cs
+│   ├── IndicatorContext.Cci.cs
+│   ├── IndicatorContext.WilliamsR.cs
+│   ├── IndicatorContext.Obv.cs
+│   ├── IndicatorContext.Mfi.cs
+│   ├── IndicatorContext.ParabolicSar.cs
+│   ├── IndicatorContext.Ichimoku.cs
+│   ├── IndicatorContext.BollingerBands.cs
+│   ├── IndicatorContext.Stochastic.cs
+│   └── IndicatorContext.Macd.cs
+└── ConsoleApp/                          # Demo console application
+    └── Program.cs
+```
+
+---
 
 ## Requirements
 
@@ -393,13 +506,7 @@ var rsi = context.GetRsi(14);
 
 ## License
 
-This project is licensed under the MIT License - a permissive free software license.
-
-**You are free to:**
-- ✅ Use commercially
-- ✅ Modify
-- ✅ Distribute
-- ✅ Use privately
+MIT License — free to use commercially, modify, distribute, and use privately.
 
 ## Contributing
 

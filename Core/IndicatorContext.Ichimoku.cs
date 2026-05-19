@@ -70,4 +70,45 @@ public partial class IndicatorContext<T>
         _ichimokus.Add(new Indicators.IchimokuIndicator(tenkanPeriod, kijunPeriod, senkouSpanBPeriod, ichimoku));
         return ichimoku;
     }
+
+    /// <summary>
+    /// Returns all Ichimoku component values for a specific point in time.
+    /// If the full series is already cached, the result is a direct index lookup (O(1)).
+    /// Otherwise, computes the full series and caches it before indexing.
+    /// </summary>
+    /// <param name="offset">How many bars back from the latest bar. 0 = current bar, 1 = one bar ago, etc.</param>
+    /// <param name="tenkanPeriod">Tenkan-sen period.</param>
+    /// <param name="kijunPeriod">Kijun-sen period.</param>
+    /// <param name="senkouSpanBPeriod">Senkou Span B period.</param>
+    /// <returns>A tuple of (TenkanSen, KijunSen, SenkouSpanA, SenkouSpanB, ChikouSpan) at the target bar.</returns>
+    public (double TenkanSen, double KijunSen, double SenkouSpanA, double SenkouSpanB, double ChikouSpan) GetIchimoku(
+        int offset, int tenkanPeriod = 9, int kijunPeriod = 26, int senkouSpanBPeriod = 52)
+    {
+        if (offset < 0) throw new ArgumentOutOfRangeException(nameof(offset));
+
+        var targetIndex = _data.Count - 1 - offset;
+        if (targetIndex < 0) throw new ArgumentOutOfRangeException(nameof(offset), "Offset exceeds available data.");
+
+        var ichimoku = GetIchimoku(tenkanPeriod, kijunPeriod, senkouSpanBPeriod); // uses cache if available
+        return (
+            ichimoku.TenkanSen[targetIndex],
+            ichimoku.KijunSen[targetIndex],
+            ichimoku.SenkouSpanA[targetIndex],
+            ichimoku.SenkouSpanB[targetIndex],
+            ichimoku.ChikouSpan[targetIndex]
+        );
+    }
+
+    /// <summary>
+    /// Returns all Ichimoku component values at <paramref name="offset"/> bars back,
+    /// computed over a custom data list instead of the context data.
+    /// </summary>
+    /// <param name="data">External bar data to compute Ichimoku on.</param>
+    /// <param name="offset">How many bars back from the latest bar. 0 = current bar, 1 = one bar ago, etc.</param>
+    /// <param name="tenkanPeriod">Tenkan-sen period.</param>
+    /// <param name="kijunPeriod">Kijun-sen period.</param>
+    /// <param name="senkouSpanBPeriod">Senkou Span B period.</param>
+    public (double TenkanSen, double KijunSen, double SenkouSpanA, double SenkouSpanB, double ChikouSpan) GetIchimoku(
+        IReadOnlyList<T> data, int offset, int tenkanPeriod = 9, int kijunPeriod = 26, int senkouSpanBPeriod = 52)
+        => new IndicatorContext<T>(data, _time, _open, _high, _low, _close, _volume).GetIchimoku(offset, tenkanPeriod, kijunPeriod, senkouSpanBPeriod);
 }

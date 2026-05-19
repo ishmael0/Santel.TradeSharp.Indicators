@@ -45,4 +45,37 @@ public partial class IndicatorContext<T>
         _macds.Add(new Indicators.MacdIndicator(fastPeriod, slowPeriod, signalPeriod, series));
         return series;
     }
+
+    /// <summary>
+    /// Returns MACD, Signal and Histogram values for a specific point in time.
+    /// If the full series is already cached, the result is a direct index lookup (O(1)).
+    /// Otherwise, computes the full series and caches it before indexing.
+    /// </summary>
+    /// <param name="fastPeriod">The fast EMA period.</param>
+    /// <param name="slowPeriod">The slow EMA period.</param>
+    /// <param name="signalPeriod">The signal EMA period.</param>
+    /// <param name="offset">How many bars back from the latest bar. 0 = current bar, 1 = one bar ago, etc.</param>
+    /// <returns>A tuple of (Macd, Signal, Histogram) at the target bar.</returns>
+    public (double Macd, double Signal, double Histogram) GetMacd(int fastPeriod, int slowPeriod, int signalPeriod, int offset)
+    {
+        if (offset < 0) throw new ArgumentOutOfRangeException(nameof(offset));
+
+        var targetIndex = _data.Count - 1 - offset;
+        if (targetIndex < 0) throw new ArgumentOutOfRangeException(nameof(offset), "Offset exceeds available data.");
+
+        var series = GetMacd(fastPeriod, slowPeriod, signalPeriod); // uses cache if available
+        return (series.Macd[targetIndex], series.Signal[targetIndex], series.Histogram[targetIndex]);
+    }
+
+    /// <summary>
+    /// Returns MACD, Signal and Histogram values at <paramref name="offset"/> bars back,
+    /// computed over a custom data list instead of the context data.
+    /// </summary>
+    /// <param name="data">External bar data to compute MACD on.</param>
+    /// <param name="fastPeriod">The fast EMA period.</param>
+    /// <param name="slowPeriod">The slow EMA period.</param>
+    /// <param name="signalPeriod">The signal EMA period.</param>
+    /// <param name="offset">How many bars back from the latest bar. 0 = current bar, 1 = one bar ago, etc.</param>
+    public (double Macd, double Signal, double Histogram) GetMacd(IReadOnlyList<T> data, int fastPeriod, int slowPeriod, int signalPeriod, int offset)
+        => new IndicatorContext<T>(data, _time, _open, _high, _low, _close, _volume).GetMacd(fastPeriod, slowPeriod, signalPeriod, offset);
 }
